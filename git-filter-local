@@ -1,0 +1,136 @@
+#!/bin/bash -e
+# git config filter.local.clean 'git-filter-local --clean %f'
+# git config filter.local.smudge 'git-filter-local --smudge %f'
+# echo '* filter=local' >>$GIT_DIR/.gitattributes
+USAGE='((--clean | --smudge) <filename> | (--save | --remove) [filename]* | --clear | --show | [--list])'
+SUBDIRECTORY_OK=true
+PATH=${PATH:+${PATH}:}$(git --exec-path)
+. git-sh-setup
+MODE=${1}
+case ${MODE} in
+--clean)
+    FILENAME=${*:2}
+    [[ -n ${FILENAME} ]] || usage
+    TREE= WORK=
+    trap 'rm -rf "${TREE}" "${WORK}"' EXIT
+    TREE=$(mktemp -t git-filter-local.tree.XXXXXXXXXX)
+    WORK=$(mktemp -d -t git-filter-local.work.XXXXXXXXXX)
+    if REF=$(git rev-parse --quiet --verify refs/local); then
+        GIT_INDEX_FILE=${TREE} git read-tree --no-sparse-checkout "${REF}^"
+    else
+        GIT_INDEX_FILE=${TREE} git read-tree --empty
+    fi
+    if [[ ${FILENAME} = */* ]]; then
+        mkdir -p "${WORK}/${FILENAME%/*}"
+    fi
+    cat >"${WORK}/${FILENAME}"
+    { GIT_INDEX_FILE=${TREE} git diff-index --cached --binary "${REF}^{tree}" -- "${FILENAME}" 2>/dev/null || :; } |
+    { patch --directory="${WORK}" --silent --strip=1 --batch 2>/dev/null >&2 || :; }
+    cat "${WORK}/${FILENAME}"
+    ;;
+--smudge)
+    FILENAME="${*:2}"
+    [[ -n ${FILENAME} ]] || usage
+    TREE= WORK=
+    trap 'rm -rf "${TREE}" "${WORK}"' EXIT
+    TREE=$(mktemp -t git-filter-local.tree.XXXXXXXXXX)
+    WORK=$(mktemp -d -t git-filter-local.work.XXXXXXXXXX)
+    if REF=$(git rev-parse --quiet --verify refs/local); then
+        GIT_INDEX_FILE=${TREE} git read-tree --no-sparse-checkout "${REF}"
+    else
+        GIT_INDEX_FILE=${TREE} git read-tree --empty
+    fi
+    if [[ ${FILENAME} = */* ]]; then
+        mkdir -p "${WORK}/${FILENAME%/*}"
+    fi
+    cat >"${WORK}/${FILENAME}"
+    { GIT_INDEX_FILE=${TREE} git diff-index --cached --binary "${REF}^^{tree}" -- "${FILENAME}" 2>/dev/null || :; } |
+    { patch --directory="${WORK}" --silent --strip=1 --batch 2>/dev/null >&2 || :; }
+    cat "${WORK}/${FILENAME}"
+    ;;
+--save)
+    require_work_tree
+    PREFIX=$(git rev-parse --show-cdup) TREE1= TREE2=
+    trap 'rm -f "${TREE1}" "${TREE2}"' EXIT
+    TREE1=$(mktemp -t git-filter-local.tree.XXXXXXXXXX)
+    TREE2=$(mktemp -t git-filter-local.tree.XXXXXXXXXX)
+    if REF=$(git rev-parse --quiet --verify refs/local); then
+        GIT_INDEX_FILE=${TREE1} git read-tree --no-sparse-checkout "${REF}^"
+        GIT_INDEX_FILE=${TREE2} git read-tree --no-sparse-checkout "${REF}"
+    else
+        GIT_INDEX_FILE=${TREE1} git read-tree --empty
+        GIT_INDEX_FILE=${TREE2} git read-tree --empty
+    fi
+    for i in "${@:2}"; do
+        GIT_INDEX_FILE=${TREE1} git update-index --force-remove -- "${PREFIX}${i}"
+        GIT_INDEX_FILE=${TREE2} git update-index --force-remove -- "${PREFIX}${i}"
+    done
+    exec {DIFFFILES}< <(git diff-files --full-index -- "${@:2}")
+    cd_to_toplevel
+    while IFS=' ' read -r -u "${DIFFFILES}" srcmode dstmode srcsha1 dstsha1 remainder; do
+        [[ ${srcmode} = :* ]] || continue
+        IFS=$'\t' read -r status src dst <<<${remainder}
+        if [[ ${STATUS} = [AC]* ]]; then
+            GIT_INDEX_FILE=${TREE1} git update-index --force-remove -- "${dst:-${src}}"
+        else
+            GIT_INDEX_FILE=${TREE1} git update-index --add --cacheinfo "${srcmode#:},${srcsha1},${dst:-${src}}" --replace
+        fi
+        if [[ ${dstsha1} = *[^0]* ]]; then
+            GIT_INDEX_FILE=${TREE2} git update-index --add --cacheinfo "${dstmode},${dstsha1},${dst:-${src}}" --replace
+        elif [[ ${status} = D* ]]; then
+            GIT_INDEX_FILE=${TREE2} git update-index --add --cacheinfo "${dstmode},$(git hash-object /dev/null),${dst:-${src}}" --replace
+        else
+            GIT_INDEX_FILE=${TREE2} git update-index --add --replace -- "${dst:-${src}}"
+        fi
+    done
+    exec {DIFFFILES}<&-
+    COMMIT1=$(git commit-tree -m 'git-filter-local base' "$(GIT_INDEX_FILE=${TREE1} git write-tree)")
+    COMMIT2=$(git commit-tree -p "${COMMIT1}" -m 'git-filter-local tip' "$(GIT_INDEX_FILE=${TREE2} git write-tree)")
+    git update-ref --no-deref refs/local "${COMMIT2}" "${REF:-0000000000000000000000000000000000000000}"
+    ;;
+--remove)
+    [[ -n ${*:2} ]] || usage
+    PREFIX=$(git rev-parse --show-cdup 2>/dev/null || :) TREE1= TREE2=
+    trap 'rm -f "${TREE1}" "${TREE2}"' EXIT
+    TREE1=$(mktemp -t git-filter-local.tree.XXXXXXXXXX)
+    TREE2=$(mktemp -t git-filter-local.tree.XXXXXXXXXX)
+    if REF=$(git rev-parse --quiet --verify refs/local); then
+        GIT_INDEX_FILE=${TREE1} git read-tree --no-sparse-checkout "${REF}^"
+        GIT_INDEX_FILE=${TREE2} git read-tree --no-sparse-checkout "${REF}"
+    else
+        GIT_INDEX_FILE=${TREE1} git read-tree --empty
+        GIT_INDEX_FILE=${TREE2} git read-tree --empty
+    fi
+    for i in "${@:2}"; do
+        GIT_INDEX_FILE=${TREE1} git update-index --force-remove -- "${PREFIX}${i}"
+        GIT_INDEX_FILE=${TREE2} git update-index --force-remove -- "${PREFIX}${i}"
+    done
+    COMMIT1=$(git commit-tree -m 'git-filter-local base' "$(GIT_INDEX_FILE=${TREE1} git write-tree)")
+    COMMIT2=$(git commit-tree -p "${COMMIT1}" -m 'git-filter-local tip' "$(GIT_INDEX_FILE=${TREE2} git write-tree)")
+    git update-ref --no-deref refs/local "${COMMIT2}" "${REF:-0000000000000000000000000000000000000000}"
+    ;;
+--clear)
+    [[ -z ${*:2} ]] || usage
+    git update-ref -d refs/local
+    ;;
+--show)
+    if REF=$(git rev-parse --quiet --verify refs/local); then
+        git diff "${REF}^" "${REF}" "${@:2}"
+    fi
+    ;;
+--list|'')
+    [[ -z ${*:2} ]] || usage
+    TREE=
+    trap 'rm -f "${TREE}"' EXIT
+    TREE=$(mktemp -t git-filter-local.tree.XXXXXXXXXX)
+    if REF=$(git rev-parse --quiet --verify refs/local); then
+        GIT_INDEX_FILE=${TREE} git read-tree --no-sparse-checkout "${REF}"
+    else
+        GIT_INDEX_FILE=${TREE} git read-tree --empty
+    fi
+    GIT_INDEX_FILE=${TREE} git ls-files
+    ;;
+*)
+    usage
+    ;;
+esac

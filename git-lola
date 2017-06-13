@@ -1,0 +1,24 @@
+#!/bin/bash -e
+USAGE=''
+PATH=${PATH:+${PATH}:}$(git --exec-path)
+SUBDIRECTORY_OK=true
+. git-sh-setup
+declare -a HEADS=() CHILDREN=() PATTERNS=()
+for ref in $(git show-ref --hash -- origin/HEAD master develop gh-pages); do
+    while read -r head children; do
+        HEADS+=(${head}) CHILDREN+=(${children})
+    done < <(git rev-list -1 --parents "${ref}")
+done
+for child in "${CHILDREN[@]}"; do
+    drop=
+    for head in "${HEADS[@]}"; do
+        if [[ ${head} = ${child} ]]; then
+            drop=1
+            break
+        fi
+    done
+    if [[ -z ${drop} ]]; then
+        PATTERNS+=("^${child}")
+    fi
+done
+exec git log --graph --decorate --pretty=oneline --abbrev-commit --branches "${PATTERNS[@]}" "$@"

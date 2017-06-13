@@ -1,0 +1,9 @@
+#!/bin/sh -e
+git reset "$(git hash-object -t commit -w --stdin <<END
+tree $(git hash-object -t tree -- /dev/null)
+author nobody <nobody@localhost> 0 +0000
+committer nobody <nobody@localhost> 0 +0000
+
+END
+)"
+git log -1

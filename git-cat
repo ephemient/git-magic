@@ -1,0 +1,49 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use constant SZ => 4096;
+use POSIX qw(_exit);
+
+my @args = qw(cat-file --batch);
+if (@ARGV && $ARGV[0] eq '-L') {
+    push @args, '--follow-symlinks';
+    shift;
+}
+@ARGV or @ARGV = qw(HEAD);
+
+my $child = open my $in, '-|';
+defined $child or die "cannot fork: $!";
+unless ($child) {
+    $child = open my $out, '|-';
+    defined $child or do {
+        warn "cannot fork: $!";
+        _exit(-1);
+    };
+    unless ($child) {
+        exec 'git', @args;
+        warn "cannot exec: $!";
+        _exit(-1);
+    }
+    print $out "$_\n" for @ARGV;
+    close $out;
+    _exit($?);
+}
+
+my $n = 0;
+while (readline $in) {
+    my ($name, $type, $size) = split;
+    if ($type eq 'missing') {
+        warn "Not a valid object name $ARGV[$n]\n";
+    } else {
+        for (my $c = 0; $c < $size;) {
+            my $l = $size - $c;
+            $c += read($in, $_, $l < SZ ? $l : SZ) || die "canot read: $!";
+            print;
+        }
+        read $in, $_, 1;
+    }
+} continue {
+    $n++;
+}
+close $in;
+die if $n != @ARGV;

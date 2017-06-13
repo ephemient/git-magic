@@ -1,0 +1,12 @@
+#!/bin/bash -e
+remote=${1:-origin}
+git remote update --prune -- "${remote}" "${@:2}"
+ref=$(git symbolic-ref -q HEAD || :)
+for branch in master develop gh-pages; do
+    if [[ ${ref} != refs/heads/${branch} ]] && id=$(git rev-parse --verify --quiet "refs/remotes/${remote}/${branch}"); then
+        git branch -f "${branch}" "${id}"
+    fi
+done
+if [[ ${ref} = refs/heads/* ]] && git rev-parse --verify --quiet "refs/remotes/${remote}/${ref#refs/heads/}" >/dev/null; then
+    git pull --ff-only . "refs/remotes/${remote}/${ref#refs/heads/}"
+fi

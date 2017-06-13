@@ -1,0 +1,54 @@
+[user]
+	name = Daniel Lin
+	email = ephemient@gmail.com
+[core]
+	pager = cat
+	preloadindex = true
+	excludesfile = /home/dtlin/.gitignore
+[color]
+	ui = auto
+[diff]
+	algorithm = patience
+	renames = true
+	wordRegex = [^\\s\\w]|\\w+
+[grep]
+	lineNumber = true
+	patternType = extended
+[log]
+	abbrevCommit = true
+	decorate = true
+[merge]
+	branchdesc = true
+	log = true
+	stat = true
+[rebase]
+	autostash = true
+	autosquash = true
+	stat = true
+[rerere]
+	enabled = true
+[push]
+	default = simple
+[alias]
+	br = branch
+	brs = branch -vv
+	ci = commit
+	co = checkout
+	lol = log --graph --pretty=oneline
+	lola = log --graph --pretty=oneline --all
+	ls = ls-files --exclude-standard
+	pass = !pass git
+	st = status
+	wdiff = diff --color-words
+[branch]
+	autosetupmerge = always
+	autosetuprebase = always
+[showbranch]
+	default = --topo-order
+	default = heads/*
+[filter "local"]
+    	clean = git-filter-local --clean %f
+    	smudge = git-filter-local --smudge %f
+[credential]
+	helper = cache
+	helper = store

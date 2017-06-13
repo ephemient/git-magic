@@ -1,0 +1,120 @@
+.gradle/
+build/
+concat/
+#css2/
+*.css
+#js3/
+#js3_secure/
+precompiled/
+
+### Directories to ignore
+
+# Bazaar
+# http://bazaar.canonical.com/
+.bzr/
+
+# Codeville
+# http://freecode.com/projects/codeville
+.cdv/
+
+# Interface Builder (Xcode)
+# http://en.wikipedia.org/wiki/Interface_Builder
+*.dep/
+*.dot/
+*.nib/
+*.plst/
+
+# Git
+# http://git-scm.com/
+.git/
+
+# Mercurial
+# http://mercurial.selenic.com/
+.hg/
+
+# quilt
+# http://directory.fsf.org/wiki/Quilt
+.pc/
+
+# Subversion
+# http://subversion.tigris.org/
+.svn/
+
+# Monotone
+# http://www.monotone.ca/
+_MTN/
+
+# CVS
+# http://savannah.nongnu.org/projects/cvs
+CVS/
+
+# RCS
+# http://www.gnu.org/software/rcs/
+RCS/
+
+# SCCS
+# http://en.wikipedia.org/wiki/Source_Code_Control_System
+SCCS/
+
+# darcs
+# http://darcs.net/
+_darcs/
+
+# Vault/Fortress
+_sgbak/
+
+# autoconf
+# http://www.gnu.org/software/autoconf/
+autom4te.cache/
+
+# Perl module building
+blib/
+_build/
+
+# Perl Devel::Cover module's output directory
+# https://metacpan.org/release/Devel-Cover
+cover_db/
+
+# Node modules created by npm
+node_modules/
+
+# CMake cache
+# http://www.cmake.org/
+CMakeFiles/
+
+# Eclipse workspace folder
+# http://eclipse.org/
+.metadata/
+
+# Cabal (Haskell) sandboxes
+# http://www.haskell.org/cabal/users-guide/installing-packages.html
+.cabal-sandbox/
+
+### Files to ignore
+
+# Backup files
+*.bak
+*~
+
+# Emacs swap files
+[#]?*[#]
+
+# vi/vim swap files http://vim.org/
+[._]*.swp
+
+# core dumps
+core.?*
+!core.*[^0-9]*
+
+# minified Javascript
+*[.-]min.js
+*.js.min
+
+# minified CSS
+*.min.css
+*.css.min
+
+# JS and CSS source maps
+*.js.map
+*.css.map
+

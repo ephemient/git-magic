@@ -1,0 +1,72 @@
+#!/bin/bash -e
+USAGE='git sgrep [<options>] [-e] <pattern> [<rev>...] [[--] <path>...]'
+NONGIT_OK=1
+SUBDIRECTORY_OK=1
+. "$(git --exec-path)/git-sh-setup"
+
+declare -a opts=() patterns=() revpaths=()
+git config --get-colorbool diff && opts+=(--color=always) || opts+=(--color=never)
+while (($#)); do
+    arg=$1; shift
+    case "$arg" in
+        -e|-f)
+            (($#)) || die "error: switch \`$arg' requires a value"
+            patterns+=("$arg" "$1")
+            shift
+            ;;
+        --and|--or|--not)
+            patterns+=("$arg")
+            ;;
+        \()
+            lvl=1 patterns+=("$arg")
+            while (($#)); do
+                arg=$1; shift
+                patterns+=("$arg")
+                if [[ $arg = '(' ]]; then
+                    ((++lvl))
+                elif [[ $arg = ')' ]] && ((--lvl<1)); then
+                    break
+                fi
+            done
+            ((lvl<1)) || die 'fatal: unmatched parenthesis'
+            ;;
+        --)
+            revpaths+=(-- "$@")
+            set --
+            ;;
+        --color=auto)
+            if [[ -t $1 ]]; then
+                opts+=(--color=always)
+            else
+                opts+=(--color=never)
+            fi
+            ;;
+        -*)
+            opts+=("$arg")
+            ;;
+        *)
+            if ((${#patterns[*]})); then
+                revpaths+=("$arg")
+            else
+                patterns+=("$arg")
+            fi
+    esac
+done
+
+((${#patterns[*]})) || die 'fatal: no pattern given.'
+
+doit() {
+    set +e
+    git --no-pager grep "$@"
+    if [[ $(git rev-parse --is-inside-work-tree 2>/dev/null) = true ]]; then
+        git --no-pager submodule --quiet foreach --recursive 'git --no-pager grep --full-name '"$(printf '%q ' "$@")"'| sed "i\\
+$path/" || :'
+    fi
+}
+
+: ${GIT_PAGER:=$(git var GIT_PAGER)}
+if [[ ${GIT_PAGER:-cat} = cat ]]; then
+    doit "${opts[@]}" "${patterns[@]}" "${revpaths[@]}"
+else
+    doit "${opts[@]}" "${patterns[@]}" "${revpaths[@]}" | LESS=${LESS:-FXR} ${GIT_PAGER}
+fi
