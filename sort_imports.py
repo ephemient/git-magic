@@ -11,7 +11,6 @@ import sys
 
 IGNORES = ('.*', 'build')
 IMPORT_RE = re.compile(r'import\s+(?:(?P<static>static)\s+)?(?P<type>\w+(?:\.\w+)*(?:\.\*)?)')
-SORT_GROUPS = ('android', 'com', 'junit', 'net', 'org', 'java', 'javax', None, 'static')
 COMMENT_START = '//'
 MULTILINE_COMMENT_START = '/*'
 JAVADOC_START = '/**'
@@ -20,22 +19,73 @@ JAVADOC_LINK_RE = re.compile(r'\{@link\b(?:\s+(?:\w+\.)*(?P<type>\w+)).*?\}')
 IDENTIFIER_RE = re.compile(r'(?P<type>\w+)(?:\.\w+)*', re.UNICODE)
 STRING_RE = re.compile(r'"(?:[^"\\]|\\[btnfr"\'\\]|\\0[0-3]?[0-9]{0,2}|\\u+[0-9A-Fa-f]{4})*"')
 
-def import_group(type):
-    if type.startswith('java.') or type.startswith('javax.'):
-        return 'java'
-    return type.split('.', 1)[0]
+class ImportGroup(object):
+    def __init__(self, *args, **kwargs):
+        super(ImportGroup, self).__init__()
+        self.priority = kwargs['priority']
+        self.static = kwargs.get('static', False)
+        self.packages = args
 
-def import_group_key(group):
-    try:
-        return (SORT_GROUPS.index(group),)
-    except ValueError:
-        return (SORT_GROUPS.index(None), group)
+    def match(self, name, static=False):
+        if self.static is None or self.static == static and any(
+                name.startswith(package + '.') for package in self.packages):
+            return self.priority
+        return -1
+
+    def sortkey(self, name):
+        return name
+
+class TAJavaxJavaImportGroup(ImportGroup):
+    def __init__(self, **kwargs):
+        super(TAJavaxJavaImportGroup, self).__init__('java', 'javax', **kwargs)
+
+    def sortkey(self, name):
+        return (name.startswith('java.'), name)
+
+class FallbackImportGroup(ImportGroup):
+    def __init__(self, **kwargs):
+        super(FallbackImportGroup, self).__init__(**kwargs)
+
+    def match(self, name, static=False):
+        if self.static is None or self.static == static:
+            return self.priority
+        return -1
+
+class ImportGroups(object):
+    def __init__(self):
+        super(ImportGroups, self).__init__()
+        self.import_groups = [
+            ImportGroup('android', priority=2),
+            ImportGroup('com', priority=2),
+            ImportGroup('junit', priority=2),
+            ImportGroup('net', priority=2),
+            ImportGroup('org', priority=2),
+            ImportGroup('java', priority=2),
+            ImportGroup('javax', priority=2),
+            FallbackImportGroup(priority=1),
+            FallbackImportGroup(priority=1, static=True) ]
+        self.grouped_imports = [{} for _ in self.import_groups]
+
+    def add_import(self, line, name, static=False):
+        i, _ = max(enumerate(self.import_groups), key=lambda (_, g): g.match(name, static=static))
+        self.grouped_imports[i][name] = line
+
+    def sorted_imports(self, referenced_types=None):
+        for group, imports in map(None, self.import_groups, self.grouped_imports):
+            if referenced_types is not None:
+                imports = {name: line for name, line in imports.iteritems()
+                        if any(name.endswith('.' + type) for type in {'*'} | referenced_types)}
+            if not imports:
+                continue
+            for _, line in sorted(imports.iteritems(), key=lambda (name, _): group.sortkey(name)):
+                yield line
+            yield '\n'
 
 def sort_imports(file, inplace=False, remove_unused=False):
     inlines = file.readlines()
     before_imports = []
-    import_groups = collections.defaultdict(dict)
-    referenced_types = set()
+    import_groups = ImportGroups()
+    referenced_types = set() if remove_unused else None
     after_imports = []
     mode = 'before_imports'
     in_comment = False
@@ -107,20 +157,8 @@ def sort_imports(file, inplace=False, remove_unused=False):
             continue
         consecutive_newlines = 0
         type = match.group('type')
-        group = import_group(match.group('static') or type)
-        import_groups[group if group in SORT_GROUPS else None][type] = line
-    sorted_imports = []
-    for group in sorted(import_groups.iterkeys(), key=import_group_key):
-        nonempty_group = False
-        for type, line in sorted(import_groups[group].items()):
-            if remove_unused:
-                type = type[type.rfind('.') + 1:]
-                if type != '*' and type not in referenced_types:
-                    continue
-            nonempty_group = True
-            sorted_imports.append(line)
-        if nonempty_group:
-            sorted_imports.append('\n')
+        import_groups.add_import(line, type, bool(match.group('static')))
+    sorted_imports = list(import_groups.sorted_imports(referenced_types=referenced_types))
     sorted_imports.extend('\n' for _ in range(1, consecutive_newlines))
     outlines = before_imports + sorted_imports + after_imports
     if file != sys.stdin or not inplace:
