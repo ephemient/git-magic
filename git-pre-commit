@@ -9,14 +9,26 @@ do_sort_imports() {
         git ls-files --cached --stage -- "${path}" |
         while read -r mode obj1 stage _; do
             [[ ${stage} = 0 ]] || continue
-            obj2=$(git cat-file blob "${obj1}" | sort_imports.py -iu - | git hash-object -t blob -w --stdin)
+            obj2=$(git cat-file blob "${obj1}" | ~/src/styleguide/sort_imports.py -iu - | git hash-object -t blob -w --stdin)
             printf '%s %s %s\t%s\0' "${mode}" "${obj2}" "${stage}" "${path}"
         done
     done |
     git update-index --replace -z --index-info
 }
 
+do_format_kotlin() {
+    local files
+    mapfile -d '' files < <(git diff-index --cached --diff-filter=d --name-only -z HEAD -- '*.kt' | grep -Fvxzf <(git diff-files --name-only -z -- '*.kt'))
+    [[ ${#files[*]} -gt 0 ]] || return
+    ./$(git rev-parse --show-cdup)/gradlew formatKotlin # || return
+    git update-index --replace -- "${files[@]}"
+}
+
 case ${SORT_IMPORTS:-$(git config hooks.sort_imports 2>/dev/null || echo true)} in
     1|t|true|y|yes|head) do_sort_imports HEAD;;
     c|changed|d|diff|o|origin|u|upstream) do_sort_imports $(git rev-parse --symbolic-full-name @{u} 2>/dev/null || :);;
+esac
+
+case ${FORMAT_KOTLIN:-$(git config hooks.format_kotlin 2>/dev/null || echo true)} in
+    1|t|true|y|yes) do_format_kotlin HEAD;;
 esac
