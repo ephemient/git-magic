@@ -60,9 +60,9 @@ class ImportGroups(object):
             ImportGroup('junit', priority=2),
             ImportGroup('net', priority=2),
             ImportGroup('org', priority=2),
+            FallbackImportGroup(priority=1),
             ImportGroup('java', priority=2),
             ImportGroup('javax', priority=2),
-            FallbackImportGroup(priority=1),
             FallbackImportGroup(priority=1, static=True) ]
         self.grouped_imports = [{} for _ in self.import_groups]
 
