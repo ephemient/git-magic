@@ -1,0 +1,64 @@
+#!/bin/bash
+set -e
+
+OPTIONS_SPEC="$0 [<options>] [<commit-ish> --] [file|dir]...
+
+$0 reverts files if they contain only blank and import line changes.
+--
+n,dry-run       show what would be reverted, without reverting
+h,help          show this help
+" OPTIONS_KEEPDASHDASH=1 SUBDIRECTORY_OK=1 . "$(git --exec-path)/git-sh-setup"
+require_work_tree
+
+dry_run=
+while getopts 'n' flag; do
+    case $flag in
+        n) dry_run=1;;
+    esac
+done
+shift $((OPTIND - 1))
+
+base=
+if [[ $2 = -- ]]; then
+    base=$(peel_committish "$1")
+    shift 2
+elif [[ $1 = -- ]]; then
+    shift
+fi
+
+say >&2 "Computing differences to ${base:+commit }${base:-index}..."
+list_unchanged() {
+    files=() changes=() changed=
+    while read -r line; do
+        case $line in
+            '--- '*) changed= ;;
+            '+++ '*)
+                file=${line#*/}
+                files+=("$file")
+                ;;
+            [-+]'import'[[:space:]]*) ;;
+            [-+]*[^[:space:]]*)
+                ((changed)) || changes+=("$file")
+                changed=1
+                ;;
+        esac
+    done <<EOF
+$(
+    args=()
+    for arg in "${@-}"; do
+        case $arg in
+            *.java|*.kt|*.kts) args+=("$arg");;
+            *) args+=("$arg${arg:+/}*.java" "$arg${arg:+/}*.kt" "$arg${arg:+/}*.kts");;
+        esac
+    done
+    git diff --diff-filter=ad $base -- "${args[@]}"
+)
+EOF
+    comm -23 <(printf '%s\n' "${files[@]}") <(printf '%s\n' "${changes[@]}")
+}
+if [[ -n $dry_run ]]; then
+    list_unchanged "$@"
+else
+    unchanged=($(list_unchanged "$@"))
+    ((${#unchanged[*]})) && (set -x; git checkout $base -- "${unchanged[@]}")
+fi
