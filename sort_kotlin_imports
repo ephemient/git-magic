@@ -121,7 +121,8 @@ sub expand ($@) {
             exec qw(git ls-files -z --cached --others --exclude-standard --),
                 @args
                     ? map { /\.kts?\Z/ ? $_ : s/\*?\Z/*.kt/r, s/\*?\Z/*.kts/r } @args
-                    : qw(*.kt *.kts);
+                    : qw(*.kt *.kts)
+                or die "exec: $@";
         }
         {
             local $/ = "\0";
@@ -163,16 +164,14 @@ sub diff_lines (\@\@;$$$$) {
     $a0 //= 0, $b0 //= 0, $a1 //= $#$a, $b1 //= $#$b;
     $a0++, $b0++ while $a0 <= $a1 && $b0 <= $b1 && $$a[$a0] eq $$b[$b0];
     $a1--, $b1-- while $a0 <= $a1 && $b0 <= $b1 && $$a[$a1] eq $$b[$b1];
-    my %f = ("$a0$;$b0" => 1);
-    my %g = ("$a1$;$b1" => 1);
-    while (keys %f && keys %g) {
-        (my @f, %f) = keys %f;
+    my (%f, %g, $x, $y);
+    $f{$a0, $b0} = $g{$a1, $b1} = 1;
+    while (1) {
+        (my @f, %f) = keys %f or last;
         for (@f) {
-            my ($x, $y) = split /\Q$;/;
-            if ($x <= $a1 && $y <= $b1 && $$a[$x] eq $$b[$y]) {
-                return &diff_lines($a, $b, $a0, $b0, $x - 1, $y - 1),
-                    &diff_lines($a, $b, $x + 1, $y + 1, $a1, $b1)
-                    if exists $g{$x + 1, $y + 1};
+            ($x, $y) = split /\Q$;/;
+            if ($x < $a1 && $y < $b1 && $$a[$x] eq $$b[$y]) {
+                goto RECURSE if exists $g{$x + 1, $y + 1};
                 $f{$x + 1, $y + 1} = 1;
             }
             else {
@@ -180,13 +179,11 @@ sub diff_lines (\@\@;$$$$) {
                 $f{$x, $y + 1} = 1 if $y < $b1;
             }
         }
-        (my @g, %g) = keys %g;
+        (my @g, %g) = keys %g or last;
         for (@g) {
-            my ($x, $y) = split /\Q$;/;
-            if ($x >= $a0 && $y >= $b0 && $$a[$x] eq $$b[$y]) {
-                return &diff_lines($a, $b, $a0, $b0, $x - 1, $y - 1),
-                    &diff_lines($a, $b, $x + 1, $y + 1, $a1, $b1)
-                    if exists $f{$x + 1, $y + 1};
+            ($x, $y) = split /\Q$;/;
+            if ($x > $a0 && $y > $b0 && $$a[$x] eq $$b[$y]) {
+                goto RECURSE if exists $f{$x + 1, $y + 1};
                 $g{$x - 1, $y - 1} = 1;
             }
             else {
@@ -196,6 +193,9 @@ sub diff_lines (\@\@;$$$$) {
         }
     }
     return map(['-', $_, $b0], $a0..$a1), map(['+', $a1 + 1, $_], $b0..$b1);
+    RECURSE:
+    return &diff_lines($a, $b, $a0, $b0, $x - 1, $y - 1),
+        &diff_lines($a, $b, $x + 1, $y + 1, $a1, $b1)
 }
 
 sub diff_hunks (\@\@;$) {
@@ -204,7 +204,6 @@ sub diff_hunks (\@\@;$) {
     my (@hunks, $hunk_x, $hunk_y);
     for (&diff_lines($a, $b)) {
         my ($d, $x, $y) = @$_;
-        next if $d !~ /\A[-+]\Z/;
         if (!@hunks || $hunk_x < $x && $hunk_y < $y) { push @hunks, [$_] }
         else { push @{$hunks[-1]}, $_ }
         $hunk_x = $x + 2 * $context;
@@ -259,7 +258,7 @@ sub process (&$\@\@) {
     elsif ($order eq 'idea') {
         @imports = sort {
             $a =~ /\sas\s/ <=> $b =~ /\sas\s/ or
-            $a =~ /^import\s(?:javax?|kotlin)\./ <=> $b =~ /^import\s(?:javax?|kotlin)\./ or
+            $a =~ /^import\s+(?:javax?|kotlin)\./ <=> $b =~ /^import\s+(?:javax?|kotlin)\./ or
             $a cmp $b
         } @imports;
     }
@@ -272,8 +271,9 @@ sub process (&$\@\@) {
 sub replace_file ($$@) {
     my ($name, $extension, @contents) = @_;
     my (undef, undef, $mode) = stat $name or warn "stat: $@";
-    my ($basename, $dirname, $suffix) = fileparse($name, qr/\.kts?/);
+    my ($basename, $dirname, $suffix) = fileparse($name, qr/\.[^.]*/);
     my $tmpfile = File::Temp->new(TEMPLATE => "$basename.XXXX", DIR => $dirname, SUFFIX => $suffix);
+    binmode $tmpfile, ':utf8';
     chmod $mode & ~S_IFMT, $tmpfile or warn "chmod: $@" if defined $mode;
     print $tmpfile @contents;
     $tmpfile->close or die "close: $@";

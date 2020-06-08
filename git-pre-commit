@@ -4,12 +4,20 @@ exec 1>&2
 
 do_sort_imports() {
     local parent=${1:-$(git hash-object -t tree /dev/null)} mode obj1 obj2 stage path _
-    git diff-index --cached --diff-filter=d --name-only ${parent} -z -- '*.java' |
+    git diff-index --cached --diff-filter=d --name-only ${parent} -z -- '*.java' '*.kt' '*.kts' |
     while read -r -d '' path; do
         git ls-files --cached --stage -- "${path}" |
         while read -r mode obj1 stage _; do
             [[ ${stage} = 0 ]] || continue
-            obj2=$(git cat-file blob "${obj1}" | sort_imports.py -iu - | git hash-object -t blob -w --stdin)
+            obj2=$(
+                git cat-file blob "${obj1}" |
+                case ${path} in
+                    *.java) sort_java_imports -u -;;
+                    *.kt|*.kts) sort_kotlin_imports -;;
+                    *) cat;;
+                esac |
+                git hash-object -t blob -w --stdin
+            )
             printf '%s %s %s\t%s\0' "${mode}" "${obj2}" "${stage}" "${path}"
         done
     done |
