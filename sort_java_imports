@@ -35,13 +35,6 @@ class ImportGroup(object):
     def sortkey(self, name):
         return name
 
-class TAJavaxJavaImportGroup(ImportGroup):
-    def __init__(self, **kwargs):
-        super(TAJavaxJavaImportGroup, self).__init__('java', 'javax', **kwargs)
-
-    def sortkey(self, name):
-        return (name.startswith('java.'), name)
-
 class FallbackImportGroup(ImportGroup):
     def __init__(self, **kwargs):
         super(FallbackImportGroup, self).__init__(**kwargs)
