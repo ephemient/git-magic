@@ -2,15 +2,15 @@
 
 =head1 NAME
 
-sort_imports - sort Kotlin import statements
+sort_kotlin_imports - sort Kotlin import statements
 
 =head1 SYNOPSIS
 
-B<sort_imports> [B<-i>I<.bak>] [B<-d>[I<lines>]] [B<-o>[B<ascii>|B<idea>|B<auto>]] [B<-c>I<commit-ish>] [B<-v>] [I<directory>|I<file>|B<->]...
+B<sort_kotlin_imports> [B<-i>I<.bak>] [B<-d>[I<lines>]] [B<-o>[B<ascii>|B<idea>|B<auto>]] [B<-c>I<commit-ish>] [B<-v>] [I<directory>|I<file>|B<->]...
 
 =head1 DESCRIPTION
 
-B<sort_imports> sorts Kotlin import statements into a canonical order.
+B<sort_kotlin_imports> sorts Kotlin import statements into a canonical order.
 
 It may be used as a filter in a shell pipeline with B<->, and will also apply to the specified files and Kotlin files found recursively within the specified directories.
 If none are given, it defaults to a recursive search of the current working directory.
@@ -170,9 +170,9 @@ sub diff_lines (\@\@;$$$$) {
         (my @f, %f) = keys %f or last;
         for (@f) {
             ($x, $y) = split /\Q$;/;
-            if ($x < $a1 && $y < $b1 && $$a[$x] eq $$b[$y]) {
-                goto RECURSE if exists $g{$x + 1, $y + 1};
-                $f{$x + 1, $y + 1} = 1;
+            if ($$a[$x] eq $$b[$y]) {
+                goto RECURSE if exists $g{$x, $y};
+                $f{$x + 1, $y + 1} = 1 if $x < $a1 && $y < $b1;
             }
             else {
                 $f{$x + 1, $y} = 1 if $x < $a1;
@@ -182,9 +182,9 @@ sub diff_lines (\@\@;$$$$) {
         (my @g, %g) = keys %g or last;
         for (@g) {
             ($x, $y) = split /\Q$;/;
-            if ($x > $a0 && $y > $b0 && $$a[$x] eq $$b[$y]) {
-                goto RECURSE if exists $f{$x + 1, $y + 1};
-                $g{$x - 1, $y - 1} = 1;
+            if ($$a[$x] eq $$b[$y]) {
+                goto RECURSE if exists $f{$x, $y};
+                $g{$x - 1, $y - 1} = 1 if $x > $a0 && $y > $b0;
             }
             else {
                 $g{$x - 1, $y} = 1 if $x > $a0;
