@@ -1,0 +1,58 @@
+#!/bin/bash
+set -e
+IFS='
+'
+base=
+name=imgdiff.html
+git diff -z --diff-filter=ad --name-only -- "${@:-*.png}" |
+while read -r -d '' file; do
+    ae=$(git cat-file blob "$base:$file" | compare -metric AE - "$file" null: 2>&1 || :)
+    if [[ $ae -eq 0 ]]; then
+        git co $base -- "$file"
+    else
+        printf '%d\n%s\0' "$ae" "$file"
+    fi
+done |
+sort -rnz |
+{
+    declare -A dirs
+    while read -r -d '' ae file; do
+        dir=${file%${file##*/}}
+        if [[ -z ${dirs[$dir]} ]]; then
+            dirs[$dir]=1
+            printf >&2 '>%s%s\n' "$dir" "$name"
+            rm -f "$dir$name"
+            cat >"$dir$name" <<EOF
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>${dir:+${dir%/} }imgdiff</title>
+        <style>
+            .cmp .off, .cmp:hover .on { display: none; }
+            .cmp .on, .cmp:hover .off { display: inherit; }
+        </style>
+    </head>
+    <body>
+EOF
+        fi
+        printf >&2 '>>%s%s <%s %s\n' "$dir" "$name" "$ae" "${file##*/}"
+        cat >>"$dir$name" <<EOF
+        <details>
+            <summary><img alt="$ae ${file##*/}" title="$ae ${file##*/}" src="data:image/png;base64,$(
+                git cat-file blob ":$file" | compare - "$file" png:- | compare - "$file" png:- | base64
+            )"></summary>
+            <div class="cmp">
+                <img class="off" src="data:image/${file##*.};base64,$(git cat-file blob ":$file" | base64)">
+                <img class="on" src="data:image/${file##*.};base64,$(base64 "$file")">
+            </div>
+        </details>
+EOF
+    done
+    for dir in "${!dirs[@]}"; do
+        cat >>"$dir$name" <<EOF
+    </body>
+</html>
+EOF
+        printf '%s%s\n' "$dir" "$name"
+    done
+}
