@@ -47,8 +47,8 @@ $(
     args=()
     for arg in "${@-}"; do
         case $arg in
-            *.java|*.kt|*.kts) args+=("$arg");;
-            *) args+=("$arg${arg:+/}*.java" "$arg${arg:+/}*.kt" "$arg${arg:+/}*.kts");;
+            (*.java|*.kt|*.kts) args+=("$arg");;
+            (*) args+=("$arg${arg:+/}*.java" "$arg${arg:+/}*.kt" "$arg${arg:+/}*.kts");;
         esac
     done
     git diff --diff-filter=ad $base -- "${args[@]}"
