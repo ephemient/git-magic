@@ -14,7 +14,11 @@ val gitRemoteOriginUri: URI? by lazy {
                 .redirectError(File("/dev/null"))
                 .start()
         }
-        ?.run { inputStream.use { it.bufferedReader().readText().trim() }.also { waitFor() }.takeIf { exitValue() == 0 } }
+        ?.run {
+            val text = inputStream.use { it.bufferedReader().readText().trim() }
+            waitFor()
+            text.takeIf { exitValue() == 0 }
+        }
         ?.let { try { URI(it).parseServerAuthority() } catch (_: URISyntaxException) { null } }
 }
 
@@ -29,6 +33,6 @@ val isTripAdvisor: Boolean
 try {
     if (isTripAdvisor) InetAddress.getByName("maven.dev.tripadvisor.com")
 } catch (_: UnknownHostException) {
-    logger.error("*** Using TripAdvisor project off VPN: setting gradle --offline ***")
+    logger.warn("*** Using TripAdvisor project off VPN: setting gradle --offline ***")
     startParameter.isOffline = true
 }

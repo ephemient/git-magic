@@ -1,7 +1,6 @@
-import java.nio.file.AtomicMoveNotSupportedException
-import java.nio.file.FileSystems
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
+// Automatically inject TA-Dev-Root into a copy of the Java KeyStore for trusted certificates for Gradle.
+// To enable, copy both this file and TA-Dev-Root.pem to ~/.gradle/init.d/
+
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
@@ -10,64 +9,26 @@ val TRUST_STORE_PROP = "javax.net.ssl.trustStore"
 val taDevRootFile = file("TA-Dev-Root.pem")
 
 gradle.afterProject {
-    if (this != rootProject || System.getProperty(TRUST_STORE_PROP) != null) return@afterProject
-    val fs = FileSystems.getDefault()
-    val securityDir = fs.getPath(System.getProperty("java.home"), "lib", "security")
-    val defaultTrustStore = securityDir.resolve("cacerts")
-    val alternateTrustStore = securityDir.resolve("jssecacerts")
+    if (this != rootProject || System.getProperty(TRUST_STORE_PROP)?.endsWith("+ta") == true) return@afterProject
+    val defaultTrustStore = System.getProperty(TRUST_STORE_PROP)?.let { File(it) }
+        ?: File(System.getProperty("java.home"), "lib/security/cacerts")
+    val alternateTrustStore = file("build/tmp/cacerts+ta")
     try {
-        if (Files.notExists(defaultTrustStore)) return@afterProject
-        if (!Files.exists(alternateTrustStore) ||
-            Files.getLastModifiedTime(defaultTrustStore) >=
-                Files.getLastModifiedTime(alternateTrustStore)
-        ) {
-            if (!Files.isWritable(securityDir)) logger.warn("$securityDir is not writable")
-            val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
-            val trustStorePassword =
-                System.getProperty("javax.net.ssl.trustStorePassword")?.toCharArray()
-            Files.newInputStream(defaultTrustStore).use { keyStore.load(it, trustStorePassword) }
-            val taDevRoot = with(CertificateFactory.getInstance("X.509")) {
-                taDevRootFile.inputStream().use { generateCertificate(it) }
-            } as X509Certificate
-            keyStore.setCertificateEntry(taDevRoot.subjectX500Principal.name, taDevRoot)
-            val tempFile = Files.createTempFile(securityDir, "jssecacerts", null)
-            try {
-                Files.newOutputStream(tempFile).use { outputStream ->
-                    keyStore.store(outputStream, trustStorePassword ?: "changeit".toCharArray())
-                    outputStream.flush()
-                    try {
-                        Files.setPosixFilePermissions(
-                            tempFile,
-                            Files.getPosixFilePermissions(defaultTrustStore)
-                        )
-                    } catch (e: UnsupportedOperationException) {
-                        logger.warn("trustStore warning", e)
-                    }
-                    try {
-                        Files.move(
-                            tempFile,
-                            alternateTrustStore,
-                            StandardCopyOption.REPLACE_EXISTING,
-                            StandardCopyOption.ATOMIC_MOVE
-                        )
-                    } catch (_: AtomicMoveNotSupportedException) {
-                        Files.copy(
-                            tempFile,
-                            alternateTrustStore,
-                            StandardCopyOption.REPLACE_EXISTING,
-                            StandardCopyOption.COPY_ATTRIBUTES
-                        )
-                    }
-                }
-                logger.info("trustStore copied")
-            } finally {
-                Files.deleteIfExists(tempFile)
-            }
+        val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
+        val trustStorePassword = System.getProperty("${TRUST_STORE_PROP}Password")?.toCharArray()
+        if (defaultTrustStore.exists()) defaultTrustStore.inputStream().use { keyStore.load(it, trustStorePassword) }
+        val taDevRoot = with(CertificateFactory.getInstance("X.509")) {
+            taDevRootFile.inputStream().use { generateCertificate(it) }
+        } as X509Certificate
+        keyStore.setCertificateEntry(taDevRoot.subjectX500Principal.name, taDevRoot)
+        alternateTrustStore.parentFile.mkdirs()
+        alternateTrustStore.outputStream().use {
+            keyStore.store(it, trustStorePassword ?: "changeit".toCharArray())
         }
     } catch (e: Exception) {
-        logger.error("trustStore error", e)
-        return@afterProject
+        if (alternateTrustStore.exists()) alternateTrustStore.delete()
+        throw e
     }
-    System.setProperty(TRUST_STORE_PROP, alternateTrustStore.toAbsolutePath().toString())
+    System.setProperty(TRUST_STORE_PROP, alternateTrustStore.absolutePath)
     logger.info("$TRUST_STORE_PROP set to $alternateTrustStore")
 }
