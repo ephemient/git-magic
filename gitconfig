@@ -8,6 +8,9 @@
 	ui = auto
 [column]
 	ui = auto
+[branch]
+	autosetupmerge = always
+	autosetuprebase = always
 [diff]
 	algorithm = histogram
 	dirstat = lines,cumulative
@@ -23,6 +26,8 @@
 [grep]
 	lineNumber = true
 	patternType = extended
+[init]
+	defaultBranch = main
 [log]
 	abbrevCommit = true
 	decorate = true
@@ -39,6 +44,9 @@
 	enabled = true
 [push]
 	default = simple
+[showbranch]
+	default = --topo-order
+	default = heads/*
 [alias]
 	br = branch
 	brs = branch -vv
@@ -50,12 +58,6 @@
 	pass = !pass git
 	st = status
 	wdiff = diff --color-words
-[branch]
-	autosetupmerge = always
-	autosetuprebase = always
-[showbranch]
-	default = --topo-order
-	default = heads/*
 [filter "local"]
     	clean = git-filter-local --clean %f
     	smudge = git-filter-local --smudge %f
