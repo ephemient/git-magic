@@ -4,7 +4,7 @@ PATH=${PATH:+${PATH}:}$(git --exec-path)
 SUBDIRECTORY_OK=true
 . git-sh-setup
 declare -a HEADS=() CHILDREN=() PATTERNS=()
-for ref in $(git show-ref --hash -- origin/HEAD master develop gh-pages); do
+for ref in $(git show-ref --hash -- origin/HEAD master main develop gh-pages); do
     while read -r head children; do
         HEADS+=(${head}) CHILDREN+=(${children})
     done < <(git rev-list -1 --parents "${ref}")

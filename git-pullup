@@ -2,7 +2,7 @@
 remote=${1:-origin}
 git remote update --prune -- "${remote}" "${@:2}"
 ref=$(git symbolic-ref -q HEAD || :)
-for branch in master develop gh-pages; do
+for branch in master main develop gh-pages; do
     if [[ ${ref} != refs/heads/${branch} ]] && id=$(git rev-parse --verify --quiet "refs/remotes/${remote}/${branch}"); then
         git branch -f "${branch}" "${id}"
     fi
