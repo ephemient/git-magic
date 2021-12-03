@@ -1,0 +1,29 @@
+#!/bin/bash
+set -euo pipefail
+die() {
+    local rc=$?
+    echo "$@"
+    exit $rc
+}
+[[ $# -gt 0 ]] || die "Usage: $0 <workflow name> [json]"
+ACTION=$1
+[[ $# -gt 1 ]] && DATA=$2 || DATA='{"ref":"main"}'
+URL=$(git config remote.origin.url)
+[[ $URL = https://github.com/* ]] || die "Non-GitHub origin: $URL"
+PROJECT=${URL#https://github.com/}
+exec {fd}< <(git credential fill <<<url=$URL)
+while read -r -u $fd; do
+    case $REPLY in
+        path=*) PROJECT=${REPLY#*=};;
+        username=*) USER=${REPLY#*=};;
+        password=*) PASS=${REPLY#*=};;
+    esac
+done
+exec {fd}<&-
+ID=$(curl -sSH 'Accept: application/vnd.github.v3+json' -u "$USER:$PASS" \
+    "https://api.github.com/repos/${PROJECT%.git}/actions/workflows" |
+    jq --arg action "$ACTION" --raw-output '.workflows[]|select(.name==$action)|.id' |
+    head -n1)
+[[ -n $ID ]] || die "Action not found"
+curl -sSH 'Accept: application/vnd.github.v3+json' -u "$USER:$PASS" -d "$DATA" \
+    "https://api.github.com/repos/${PROJECT%.git}/actions/workflows/$ID/dispatches"
