@@ -1,3 +1,9 @@
 [user]
 	name = Daniel Lin
 	email = dlin@tripadvisor.com
+[credential]
+	helper =
+	helper = /usr/local/bin/git-credential-manager
+	credentialStore = plaintext
+[credential "https://dev.azure.com"]
+	useHttpPath = true

@@ -11,8 +11,10 @@
 [branch]
 	autosetupmerge = always
 	autosetuprebase = always
+	sort = committerdate
 [diff]
 	algorithm = histogram
+	colorMoved = true
 	dirstat = lines,cumulative
 	mnemonicPrefix = true
 	renames = true
@@ -57,15 +59,16 @@
 	ls = ls-files --exclude-standard
 	pass = !pass git
 	st = status
+	sw = switch
 	wdiff = diff --color-words
 [filter "local"]
-    	clean = git-filter-local --clean %f
-    	smudge = git-filter-local --smudge %f
+	clean = git-filter-local --clean %f
+	smudge = git-filter-local --smudge %f
 [credential]
 	helper = cache
 	helper = /usr/bin/pass-git-helper
 	useHttpPath = true
 [http]
 	cookiefile = ~/.gitcookies
-[includeIf "gitdir:ta-*/"]
+[includeIf "hasconfig:remote.*.url:https://github.com/tripadv/**"]
 	path = ~/.gitconfig-ta
